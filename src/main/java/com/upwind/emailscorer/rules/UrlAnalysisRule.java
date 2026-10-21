@@ -46,6 +46,10 @@ public class UrlAnalysisRule implements EmailScannerRule {
 	private static final int HTTP_PENALTY = 5;
 	private static final int NO_PENALTY = 0;
 
+	private static final int NOT_FOUND = -1;
+
+	private static final String HTTP_SCHEME = "http";
+
 	private static final String BRAND_REASON_FORMAT =
 			"זוהה קישור עם דומיין שעלול להתחזות למותג מוכר (%s)";
 
@@ -57,6 +61,9 @@ public class UrlAnalysisRule implements EmailScannerRule {
 
 	private static final String HTTP_REASON_FORMAT =
 			"זוהה קישור המשתמש ב-HTTP ללא הצפנה (%s)";
+
+	private static final String NO_STRUCTURAL_RISK_REASON_FORMAT =
+			"זוהה קישור לדומיין %s ללא אינדיקציות סיכון במבנה כתובת ה-URL";
 
 	private static final String TRAILING_PUNCTUATION = ".,;!?)]}";
 
@@ -82,7 +89,7 @@ public class UrlAnalysisRule implements EmailScannerRule {
 
 		List<String> reasons = new ArrayList<>();
 		int highestPenalty = NO_PENALTY;
-		int highestRiskIndex = -1;
+		int highestRiskIndex = NOT_FOUND;
 
 		while (matcher.find()) {
 			String url = removeTrailingPunctuation(matcher.group());
@@ -116,15 +123,14 @@ public class UrlAnalysisRule implements EmailScannerRule {
 				penalty = SHORTENED_URL_PENALTY;
 				reason = String.format(SHORTENER_REASON_FORMAT, host);
 
-			} else if ("http".equalsIgnoreCase(uri.getScheme())) {
+			} else if (HTTP_SCHEME.equalsIgnoreCase(uri.getScheme())) {
 				penalty = HTTP_PENALTY;
 				reason = String.format(HTTP_REASON_FORMAT, host);
 
 			} else {
 				penalty = NO_PENALTY;
 				reason = String.format(
-						"זוהה קישור לדומיין %s ללא אינדיקציות סיכון במבנהו",
-						host);
+						NO_STRUCTURAL_RISK_REASON_FORMAT, host);
 			}
 
 			if (penalty > highestPenalty) {
@@ -135,6 +141,7 @@ public class UrlAnalysisRule implements EmailScannerRule {
 			reasons.add(reason);
 		}
 
+		// Report all detected links, but apply only the highest risk penalty.
 		for (int i = 0; i < reasons.size(); i++) {
 			int penalty = i == highestRiskIndex
 					? highestPenalty : NO_PENALTY;
@@ -175,7 +182,8 @@ public class UrlAnalysisRule implements EmailScannerRule {
 	 */
 	private boolean isUrlShortener(String host) {
 		for (String shortener : URL_SHORTENERS) {
-			if (host.equals(shortener) || host.endsWith("." + shortener)) {
+			if (host.equals(shortener) ||
+					host.endsWith("." + shortener)) {
 				return true;
 			}
 		}
